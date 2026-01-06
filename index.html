@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>スマートフォン姿勢推定</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;500;700&family=Space+Mono:wght@400;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-dark: #0a0a0f;
+            --bg-card: #12121a;
+            --accent-good: #00ff88;
+            --accent-warning: #ffaa00;
+            --accent-bad: #ff4466;
+            --text-primary: #ffffff;
+            --text-secondary: #888899;
+            --grid-color: rgba(255, 255, 255, 0.03);
+        }
+        
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 100%;
+            padding: 16px;
+            padding-bottom: 100px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+        
+        .subtitle {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 8px;
+            font-family: 'Space Mono', monospace;
+        }
+        
+        .status-bar {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .status-badge {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.65rem;
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .status-badge.active {
+            border-color: var(--accent-good);
+            color: var(--accent-good);
+        }
+        
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto 20px;
+            border-radius: 16px;
+            overflow: hidden;
+            background: var(--bg-card);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+        }
+        
+        #video {
+            width: 100%;
+            display: block;
+            transform: scaleX(-1);
+        }
+        
+        .angle-display {
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 32px 24px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            text-align: center;
+        }
+        
+        .angle-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+        }
+        
+        .angle-value {
+            font-family: 'Space Mono', monospace;
+            font-size: 5rem;
+            font-weight: 700;
+            line-height: 1;
+            transition: color 0.3s ease;
+        }
+        
+        .angle-unit {
+            font-size: 2rem;
+            opacity: 0.5;
+        }
+        
+        .posture-status {
+            margin-top: 20px;
+            padding: 12px 28px;
+            border-radius: 30px;
+            font-size: 1rem;
+            font-weight: 500;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        
+        .posture-status.good {
+            background: rgba(0, 255, 136, 0.15);
+            color: var(--accent-good);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+        
+        .posture-status.warning {
+            background: rgba(255, 170, 0, 0.15);
+            color: var(--accent-warning);
+            border: 1px solid rgba(255, 170, 0, 0.3);
+        }
+        
+        .posture-status.bad {
+            background: rgba(255, 68, 102, 0.15);
+            color: var(--accent-bad);
+            border: 1px solid rgba(255, 68, 102, 0.3);
+        }
+        
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        
+        .detail-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 14px 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            text-align: center;
+        }
+        
+        .detail-card .label {
+            font-size: 0.6rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 6px;
+        }
+        
+        .detail-card .value {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+        
+        .detail-card .sub {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+        
+        .detail-card.pitch .value { color: var(--accent-good); }
+        .detail-card.yaw .value { color: #88aaff; }
+        .detail-card.roll .value { color: #ff88aa; }
+        
+        .detail-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        
+        .info-section {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .info-title {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+        }
+        
+        .info-content {
+            font-size: 0.8rem;
+            line-height: 1.8;
+            color: var(--text-secondary);
+        }
+        
+        .info-content code {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.7rem;
+        }
+        
+        .calibration-section {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .calibration-btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-family: 'Noto Sans JP', sans-serif;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: linear-gradient(135deg, #2a2a3a 0%, #1a1a2a 100%);
+            color: var(--text-primary);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .calibration-btn:active {
+            transform: scale(0.98);
+        }
+        
+        .calibration-btn.calibrating {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.2) 0%, rgba(0, 255, 136, 0.1) 100%);
+            border-color: var(--accent-good);
+            color: var(--accent-good);
+        }
+        
+        .calibration-info {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 12px;
+            line-height: 1.6;
+        }
+        
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        
+        .modal-content {
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 32px 24px;
+            max-width: 360px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .modal-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+        }
+        
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        
+        .modal-text {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+        
+        .modal-btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-family: 'Noto Sans JP', sans-serif;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            background: linear-gradient(135deg, var(--accent-good) 0%, #00cc6a 100%);
+            color: #000;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        @media (min-width: 768px) {
+            .container {
+                max-width: 500px;
+                margin: 0 auto;
+                padding: 32px;
+            }
+            
+            h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="modal" id="permissionModal">
+        <div class="modal-content">
+            <div class="modal-icon">📱</div>
+            <div class="modal-title">センサーへのアクセス</div>
+            <div class="modal-text">
+                カメラと傾斜センサーを使用して、<br>正確な首の角度を測定します。
+            </div>
+            <button class="modal-btn" id="startBtn">開始する</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <header>
+            <h1>スマートフォン姿勢推定</h1>
+            <p class="subtitle">solvePnP + DeviceOrientation</p>
+        </header>
+        
+        <div class="status-bar">
+            <span class="status-badge" id="cameraStatus">CAMERA: OFF</span>
+            <span class="status-badge" id="sensorStatus">SENSOR: OFF</span>
+        </div>
+        
+        <div class="video-container">
+            <video id="video" playsinline autoplay></video>
+        </div>
+        
+        <div class="angle-display">
+            <div class="angle-label">実際の首角度 (Pitch)</div>
+            <div class="angle-value" id="neckAngle">
+                --<span class="angle-unit">°</span>
+            </div>
+            <div class="posture-status" id="postureStatus">測定待機中</div>
+        </div>
+        
+        <div class="detail-grid">
+            <div class="detail-card pitch">
+                <div class="label">Pitch</div>
+                <div class="value" id="pitchAngle">--°</div>
+                <div class="sub">前後傾き</div>
+            </div>
+            <div class="detail-card yaw">
+                <div class="label">Yaw</div>
+                <div class="value" id="yawAngle">--°</div>
+                <div class="sub">左右回転</div>
+            </div>
+            <div class="detail-card roll">
+                <div class="label">Roll</div>
+                <div class="value" id="rollAngle">--°</div>
+                <div class="sub">傾き</div>
+            </div>
+        </div>
+        
+        <div class="detail-grid-2">
+            <div class="detail-card">
+                <div class="label">θ 顔の傾き</div>
+                <div class="value" id="facePitch">--°</div>
+                <div class="sub">solvePnP</div>
+            </div>
+            <div class="detail-card">
+                <div class="label">φ スマホの傾き</div>
+                <div class="value" id="phoneAngle">--°</div>
+                <div class="sub">傾斜センサー</div>
+            </div>
+        </div>
+        
+        <div class="info-section">
+            <div class="info-title">計算方式</div>
+            <div class="info-content">
+                <code>首の傾き = (90 - φ) + θ</code><br>
+                φ: スマホの傾き　θ: 顔の傾き
+            </div>
+        </div>
+        
+        <div class="calibration-section">
+            <div class="info-title">キャリブレーション</div>
+            <button class="calibration-btn" id="calibrateBtn">
+                正しい姿勢で基準を設定
+            </button>
+            <p class="calibration-info">
+                📌 正しい姿勢でスマホを持った状態でボタンを押してください。
+            </p>
+        </div>
+        
+        <div class="calibration-section" style="margin-top: 16px;">
+            <div class="info-title">ログ記録</div>
+            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                <button class="calibration-btn" id="logStartBtn" style="flex: 1;">
+                    ● 記録開始
+                </button>
+                <button class="calibration-btn" id="logStopBtn" style="flex: 1;" disabled>
+                    ■ 記録停止
+                </button>
+            </div>
+            <button class="calibration-btn" id="logDownloadBtn" disabled>
+                📥 CSVダウンロード
+            </button>
+            <p class="calibration-info">
+                <span id="logStatus">記録: 停止中</span><br>
+                <span id="logCount">データ数: 0</span>
+            </p>
+        </div>
+        
+        <div class="calibration-section" style="margin-top: 16px;">
+            <div class="info-title">YouTube</div>
+            <input type="text" id="youtubeUrl" placeholder="YouTubeのURLを貼り付け" style="
+                width: 100%;
+                padding: 12px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 8px;
+                background: rgba(0, 0, 0, 0.3);
+                color: var(--text-primary);
+                font-size: 0.9rem;
+                margin-bottom: 12px;
+            ">
+            <button class="calibration-btn" id="youtubeLoadBtn">
+                ▶ 動画を読み込む
+            </button>
+            <div id="youtubeContainer" style="
+                margin-top: 16px;
+                border-radius: 12px;
+                overflow: hidden;
+                display: none;
+            ">
+                <iframe id="youtubePlayer" 
+                    width="100%" 
+                    height="200" 
+                    frameborder="0" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                    allowfullscreen>
+                </iframe>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    
+    <script>
+        // 3D顔モデル座標 (mm単位)
+        const MODEL_POINTS = {
+            noseTip:      [0.0, 0.0, 0.0],
+            chin:         [0.0, -63.0, -12.0],
+            leftEyeOuter: [-43.0, 32.0, -26.0],
+            rightEyeOuter:[43.0, 32.0, -26.0],
+            leftMouth:    [-28.0, -28.0, -24.0],
+            rightMouth:   [28.0, -28.0, -24.0]
+        };
+        
+        // MediaPipeランドマークインデックス
+        const LANDMARK_IDS = {
+            noseTip: 1,
+            chin: 152,
+            leftEyeOuter: 33,
+            rightEyeOuter: 263,
+            leftMouth: 61,
+            rightMouth: 291
+        };
+        
+        // State
+        let faceMesh = null;
+        let isRunning = false;
+        let videoWidth = 640;
+        let videoHeight = 480;
+        
+        // Angles
+        let facePitch = 0;
+        let faceYaw = 0;
+        let faceRoll = 0;
+        let phoneAngle = 0;
+        let calibrationOffset = 0;
+        
+        // Smoothing
+        const smoothingFactor = 0.3;
+        let smoothedPitch = 0;
+        let smoothedYaw = 0;
+        let smoothedRoll = 0;
+        
+        // DOM Elements
+        const video = document.getElementById('video');
+        const permissionModal = document.getElementById('permissionModal');
+        const startBtn = document.getElementById('startBtn');
+        const calibrateBtn = document.getElementById('calibrateBtn');
+        const cameraStatus = document.getElementById('cameraStatus');
+        const sensorStatus = document.getElementById('sensorStatus');
+        
+        // ログ記録用
+        const logStartBtn = document.getElementById('logStartBtn');
+        const logStopBtn = document.getElementById('logStopBtn');
+        const logDownloadBtn = document.getElementById('logDownloadBtn');
+        const logStatusEl = document.getElementById('logStatus');
+        const logCountEl = document.getElementById('logCount');
+        
+        let isLogging = false;
+        let logData = [];
+        let logStartTime = null;
+        
+        // 行列演算
+        function matMul(A, B) {
+            const result = [[0,0,0],[0,0,0],[0,0,0]];
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    for (let k = 0; k < 3; k++) {
+                        result[i][j] += A[i][k] * B[k][j];
+                    }
+                }
+            }
+            return result;
+        }
+        
+        function matVecMul(M, v) {
+            return [
+                M[0][0]*v[0] + M[0][1]*v[1] + M[0][2]*v[2],
+                M[1][0]*v[0] + M[1][1]*v[1] + M[1][2]*v[2],
+                M[2][0]*v[0] + M[2][1]*v[1] + M[2][2]*v[2]
+            ];
+        }
+        
+        // solvePnP簡易実装
+        function solvePnP(imagePoints, modelPoints, focalLength, cx, cy) {
+            const n = imagePoints.length;
+            if (n < 4) return null;
+            
+            // 画像座標を正規化
+            const normalizedPoints = imagePoints.map(p => [
+                (p[0] - cx) / focalLength,
+                (p[1] - cy) / focalLength
+            ]);
+            
+            // 2D上の顔サイズを計算
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+            for (const p of imagePoints) {
+                minX = Math.min(minX, p[0]);
+                maxX = Math.max(maxX, p[0]);
+                minY = Math.min(minY, p[1]);
+                maxY = Math.max(maxY, p[1]);
+            }
+            const faceSize2D = Math.max(maxX - minX, maxY - minY);
+            
+            // Z距離を推定
+            const faceSize3D = 150;
+            const estimatedZ = (faceSize3D * focalLength) / faceSize2D;
+            
+            // インデックス
+            const noseIdx = 0;
+            const leftEyeIdx = 2;
+            const rightEyeIdx = 3;
+            
+            const eyeCenter2D = [
+                (normalizedPoints[leftEyeIdx][0] + normalizedPoints[rightEyeIdx][0]) / 2,
+                (normalizedPoints[leftEyeIdx][1] + normalizedPoints[rightEyeIdx][1]) / 2
+            ];
+            
+            const nose2D = normalizedPoints[noseIdx];
+            
+            // Roll: 目の水平線の傾き
+            const dx = normalizedPoints[rightEyeIdx][0] - normalizedPoints[leftEyeIdx][0];
+            const dy = normalizedPoints[rightEyeIdx][1] - normalizedPoints[leftEyeIdx][1];
+            const roll = Math.atan2(dy, dx);
+            
+            // 鼻と目の中心の関係
+            const noseToEye = [
+                eyeCenter2D[0] - nose2D[0],
+                eyeCenter2D[1] - nose2D[1]
+            ];
+            
+            // 3Dモデルでの距離
+            const eyeCenter3D = [
+                (modelPoints[leftEyeIdx][0] + modelPoints[rightEyeIdx][0]) / 2,
+                (modelPoints[leftEyeIdx][1] + modelPoints[rightEyeIdx][1]) / 2,
+                (modelPoints[leftEyeIdx][2] + modelPoints[rightEyeIdx][2]) / 2
+            ];
+            const nose3D = modelPoints[noseIdx];
+            const expectedDist = Math.sqrt(
+                Math.pow(eyeCenter3D[0] - nose3D[0], 2) +
+                Math.pow(eyeCenter3D[1] - nose3D[1], 2)
+            );
+            
+            // Pitch計算
+            const expectedVertical = (eyeCenter3D[1] - nose3D[1]);
+            const actualVertical = -noseToEye[1] * estimatedZ;
+            const pitch = Math.asin(Math.max(-1, Math.min(1, 
+                (actualVertical - expectedVertical) / (expectedVertical * 2)
+            ))) * 1.5;
+            
+            // Yaw計算
+            const actualHorizontal = noseToEye[0] * estimatedZ;
+            const yaw = Math.asin(Math.max(-1, Math.min(1,
+                actualHorizontal / (expectedDist * 0.8)
+            )));
+            
+            return {
+                euler: {
+                    pitch: pitch * 180 / Math.PI,
+                    yaw: yaw * 180 / Math.PI,
+                    roll: roll * 180 / Math.PI
+                }
+            };
+        }
+        
+        // イベントリスナー
+        startBtn.addEventListener('click', async () => {
+            await requestPermissions();
+        });
+        
+        calibrateBtn.addEventListener('click', () => {
+            calibrate();
+        });
+        
+        // ログ記録のイベントリスナー
+        logStartBtn.addEventListener('click', () => {
+            startLogging();
+        });
+        
+        logStopBtn.addEventListener('click', () => {
+            stopLogging();
+        });
+        
+        logDownloadBtn.addEventListener('click', () => {
+            downloadCSV();
+        });
+        
+        // YouTube読み込み
+        document.getElementById('youtubeLoadBtn').addEventListener('click', () => {
+            loadYoutube();
+        });
+        
+        document.getElementById('youtubeUrl').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                loadYoutube();
+            }
+        });
+        
+        function loadYoutube() {
+            const url = document.getElementById('youtubeUrl').value.trim();
+            const videoId = extractYoutubeId(url);
+            
+            if (videoId) {
+                const container = document.getElementById('youtubeContainer');
+                const player = document.getElementById('youtubePlayer');
+                player.src = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+                container.style.display = 'block';
+            } else {
+                alert('有効なYouTube URLを入力してください');
+            }
+        }
+        
+        function extractYoutubeId(url) {
+            const patterns = [
+                /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+                /^([a-zA-Z0-9_-]{11})$/
+            ];
+            
+            for (const pattern of patterns) {
+                const match = url.match(pattern);
+                if (match) {
+                    return match[1];
+                }
+            }
+            return null;
+        }
+        
+        function startLogging() {
+            isLogging = true;
+            logData = [];
+            logStartTime = Date.now();
+            
+            logStartBtn.disabled = true;
+            logStopBtn.disabled = false;
+            logStartBtn.style.opacity = '0.5';
+            logStopBtn.style.opacity = '1';
+            logStatusEl.textContent = '記録: 記録中 🔴';
+            logCountEl.textContent = 'データ数: 0';
+        }
+        
+        function stopLogging() {
+            isLogging = false;
+            
+            logStartBtn.disabled = false;
+            logStopBtn.disabled = true;
+            logDownloadBtn.disabled = logData.length === 0;
+            logStartBtn.style.opacity = '1';
+            logStopBtn.style.opacity = '0.5';
+            logStatusEl.textContent = '記録: 停止中';
+        }
+        
+        function recordLog(neckAngle, theta, phi) {
+            if (!isLogging) return;
+            
+            const now = Date.now();
+            const elapsed = ((now - logStartTime) / 1000).toFixed(2);
+            const timestamp = new Date(now).toISOString();
+            
+            logData.push({
+                timestamp: timestamp,
+                elapsed: elapsed,
+                neckAngle: neckAngle.toFixed(1),
+                theta: theta.toFixed(1),
+                phi: phi.toFixed(1)
+            });
+            
+            logCountEl.textContent = `データ数: ${logData.length}`;
+        }
+        
+        function downloadCSV() {
+            if (logData.length === 0) return;
+            
+            // CSVヘッダー
+            const headers = ['timestamp', 'elapsed_sec', 'neck_angle', 'theta_face', 'phi_phone'];
+            
+            // CSVデータ
+            const csvRows = [headers.join(',')];
+            for (const row of logData) {
+                csvRows.push([
+                    row.timestamp,
+                    row.elapsed,
+                    row.neckAngle,
+                    row.theta,
+                    row.phi
+                ].join(','));
+            }
+            
+            const csvContent = csvRows.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `posture_log_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.csv`;
+            link.click();
+            
+            URL.revokeObjectURL(url);
+        }
+        
+        async function requestPermissions() {
+            try {
+                if (typeof DeviceOrientationEvent !== 'undefined' && 
+                    typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    const permission = await DeviceOrientationEvent.requestPermission();
+                    if (permission !== 'granted') {
+                        alert('傾斜センサーの許可が必要です');
+                        return;
+                    }
+                }
+                
+                // 警告音用のAudioContextを初期化
+                initAudio();
+                
+                await startCamera();
+                startOrientationSensor();
+                permissionModal.classList.add('hidden');
+                
+            } catch (error) {
+                console.error('Permission error:', error);
+                alert('センサーへのアクセスに失敗しました: ' + error.message);
+            }
+        }
+        
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: 'user',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                });
+                
+                video.srcObject = stream;
+                await video.play();
+                
+                videoWidth = video.videoWidth;
+                videoHeight = video.videoHeight;
+                
+                await initFaceMesh();
+                
+                cameraStatus.textContent = 'CAMERA: ON';
+                cameraStatus.classList.add('active');
+                
+            } catch (error) {
+                console.error('Camera error:', error);
+                throw error;
+            }
+        }
+        
+        async function initFaceMesh() {
+            faceMesh = new FaceMesh({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+                }
+            });
+            
+            faceMesh.setOptions({
+                maxNumFaces: 1,
+                refineLandmarks: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+            
+            faceMesh.onResults(onFaceMeshResults);
+            
+            const cameraLoop = new Camera(video, {
+                onFrame: async () => {
+                    await faceMesh.send({ image: video });
+                },
+                width: videoWidth,
+                height: videoHeight
+            });
+            
+            await cameraLoop.start();
+            isRunning = true;
+        }
+        
+        function onFaceMeshResults(results) {
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                const landmarks = results.multiFaceLandmarks[0];
+                
+                // 6点のランドマークを抽出
+                const imagePoints = [
+                    [landmarks[LANDMARK_IDS.noseTip].x * videoWidth, 
+                     landmarks[LANDMARK_IDS.noseTip].y * videoHeight],
+                    [landmarks[LANDMARK_IDS.chin].x * videoWidth, 
+                     landmarks[LANDMARK_IDS.chin].y * videoHeight],
+                    [landmarks[LANDMARK_IDS.leftEyeOuter].x * videoWidth, 
+                     landmarks[LANDMARK_IDS.leftEyeOuter].y * videoHeight],
+                    [landmarks[LANDMARK_IDS.rightEyeOuter].x * videoWidth, 
+                     landmarks[LANDMARK_IDS.rightEyeOuter].y * videoHeight],
+                    [landmarks[LANDMARK_IDS.leftMouth].x * videoWidth, 
+                     landmarks[LANDMARK_IDS.leftMouth].y * videoHeight],
+                    [landmarks[LANDMARK_IDS.rightMouth].x * videoWidth, 
+                     landmarks[LANDMARK_IDS.rightMouth].y * videoHeight]
+                ];
+                
+                const modelPoints = [
+                    MODEL_POINTS.noseTip,
+                    MODEL_POINTS.chin,
+                    MODEL_POINTS.leftEyeOuter,
+                    MODEL_POINTS.rightEyeOuter,
+                    MODEL_POINTS.leftMouth,
+                    MODEL_POINTS.rightMouth
+                ];
+                
+                const focalLength = videoWidth;
+                const cx = videoWidth / 2;
+                const cy = videoHeight / 2;
+                
+                const poseResult = solvePnP(imagePoints, modelPoints, focalLength, cx, cy);
+                
+                if (poseResult) {
+                    smoothedPitch = smoothedPitch * (1 - smoothingFactor) + 
+                                   poseResult.euler.pitch * smoothingFactor;
+                    smoothedYaw = smoothedYaw * (1 - smoothingFactor) + 
+                                 poseResult.euler.yaw * smoothingFactor;
+                    smoothedRoll = smoothedRoll * (1 - smoothingFactor) + 
+                                  poseResult.euler.roll * smoothingFactor;
+                    
+                    facePitch = smoothedPitch;
+                    faceYaw = smoothedYaw;
+                    faceRoll = smoothedRoll;
+                }
+                
+                updateDisplay();
+            }
+        }
+        
+        function startOrientationSensor() {
+            if (window.DeviceOrientationEvent) {
+                window.addEventListener('deviceorientation', handleOrientation);
+                sensorStatus.textContent = 'SENSOR: ON';
+                sensorStatus.classList.add('active');
+            } else {
+                sensorStatus.textContent = 'SENSOR: N/A';
+            }
+        }
+        
+        function handleOrientation(event) {
+            // φ: スマホの傾き（beta = 90°で垂直）
+            let beta = event.beta;
+            if (beta !== null) {
+                // φ = beta（スマホの傾き角度そのもの）
+                phoneAngle = beta;
+                phoneAngle = Math.max(0, Math.min(180, phoneAngle));
+            }
+        }
+        
+        function updateDisplay() {
+            // 首の傾き = (90 - φ) + θ
+            // φ: スマホの傾き（beta）
+            // θ: 顔の傾き（facePitch）- キャリブレーション済み
+            const calibratedTheta = facePitch - calibrationOffset;
+            let neckAngle = (90 - phoneAngle) + calibratedTheta;
+            
+            // 0を下限にする（顔を上げても0以下にならない）
+            neckAngle = Math.max(0, neckAngle);
+            
+            document.getElementById('facePitch').textContent = facePitch.toFixed(1) + '°';
+            document.getElementById('phoneAngle').textContent = phoneAngle.toFixed(1) + '°';
+            document.getElementById('pitchAngle').textContent = calibratedTheta.toFixed(1) + '°';
+            document.getElementById('yawAngle').textContent = faceYaw.toFixed(1) + '°';
+            document.getElementById('rollAngle').textContent = faceRoll.toFixed(1) + '°';
+            
+            const displayAngle = neckAngle.toFixed(0);
+            document.getElementById('neckAngle').innerHTML = 
+                `${displayAngle}<span class="angle-unit">°</span>`;
+            
+            // ログ記録
+            recordLog(neckAngle, calibratedTheta, phoneAngle);
+            
+            updatePostureStatus(neckAngle);
+        }
+        
+        // 警告音用のAudioContext
+        let audioContext = null;
+        let isAlarmPlaying = false;
+        let alarmInterval = null;
+        
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+        
+        function playBeep() {
+            if (!audioContext) return;
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 800;
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.3);
+        }
+        
+        function startAlarm() {
+            if (isAlarmPlaying) return;
+            isAlarmPlaying = true;
+            playBeep();
+            alarmInterval = setInterval(playBeep, 1000);
+        }
+        
+        function stopAlarm() {
+            if (!isAlarmPlaying) return;
+            isAlarmPlaying = false;
+            if (alarmInterval) {
+                clearInterval(alarmInterval);
+                alarmInterval = null;
+            }
+        }
+        
+        function updatePostureStatus(angle) {
+            let status, className, color;
+            
+            if (angle <= 10) {
+                status = '✓ 良い姿勢';
+                className = 'good';
+                color = 'var(--accent-good)';
+                stopAlarm();
+            } else if (angle <= 20) {
+                status = '⚠ やや前傾';
+                className = 'warning';
+                color = 'var(--accent-warning)';
+                stopAlarm();
+            } else {
+                status = '✗ 姿勢を正して';
+                className = 'bad';
+                color = 'var(--accent-bad)';
+                startAlarm();
+            }
+            
+            document.getElementById('postureStatus').textContent = status;
+            document.getElementById('postureStatus').className = 'posture-status ' + className;
+            document.querySelector('.angle-value').style.color = color;
+        }
+        
+        function calibrate() {
+            // θ（顔の傾き）のみをキャリブレーション
+            calibrationOffset = facePitch;
+            
+            calibrateBtn.classList.add('calibrating');
+            calibrateBtn.textContent = '✓ キャリブレーション完了';
+            
+            setTimeout(() => {
+                calibrateBtn.classList.remove('calibrating');
+                calibrateBtn.textContent = '正しい姿勢で基準を設定';
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
