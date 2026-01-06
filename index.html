@@ -1016,12 +1016,12 @@
         function updatePostureStatus(angle) {
             let status, className, color;
             
-            if (angle <= 10) {
+            if (angle <= 15) {
                 status = '✓ 良い姿勢';
                 className = 'good';
                 color = 'var(--accent-good)';
                 stopAlarm();
-            } else if (angle <= 20) {
+            } else if (angle <= 29) {
                 status = '⚠ やや前傾';
                 className = 'warning';
                 color = 'var(--accent-warning)';
